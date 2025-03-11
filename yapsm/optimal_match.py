@@ -25,9 +25,12 @@ class OptimalMatcher:
         """turns itself into a networkx graph whose MaxFlow is our desired assignemtn"""
         dist, inx = self.nn_graph.kneighbors(self.trt)
 
-        self.Gflow = construct_bipart_for_flow(
-            dist, inx, n_max, self.trt.shape[0], self.ctl.shape[0]
+        Gflow = construct_bipart_for_flow(
+            dist, inx, self.trt.shape[0], self.ctl.shape[0]
         )
+        # add sink
+        demand = dist.shape[0]  # we need to send out one unit of flow for each trt
+        self.Gflow = add_source_sink(Gflow, demand, n_max)
 
     def solve_flow(self):
         flow = nx.min_cost_flow(self.Gflow, weight="cost", capacity="capacity")
@@ -53,11 +56,10 @@ class OptimalMatcher:
         return mapping_final, total_cost
 
 
-def construct_bipart_for_flow(dist, inx, n_max, n_trt, n_ctl):
+def construct_bipart_for_flow(dist, inx, n_trt, n_ctl):
     """
-    edges go from source -> TRT -> CTL -> sink
-
-    :param n_max: a ctl can have n_max trt linked to it
+    edges go from source -> (TRT -> CTL) -> sink
+    NOTE: we DONT add source/sink here
     """
     assert dist.shape[0] == inx.shape[0] == n_trt
 
@@ -88,23 +90,29 @@ def construct_bipart_for_flow(dist, inx, n_max, n_trt, n_ctl):
     # print(to_removed)
     G.remove_nodes_from(to_removed)
 
-    # add sink
-    demand = dist.shape[0]  # we need to send out one unit of flow for each trt
+    return G
+
+def add_source_sink(G, demand, n_max):
+    """
+    augmenting the bipartite CTL-TRT graph with source and sink,
+    enabling maxflow algoirithms
+    """
     G.add_node("source", nodetype="source", bipartite=1, demand=-demand)
     G.add_node("sink", nodetype="sink", bipartite=0, demand=demand)
 
-    edges = []
-    for j in range(n_trt):
-        edges.append(("source", f"trt_{j}", {"capacity": 1, "cost": 0}))
+    ctl_nodes = [n for n in G if n.startswith('ctl')]
+    trt_nodes = [n for n in G if n.startswith('trt')]
 
-    for i in range(n_ctl):
-        if f"ctl_{i}" in G:  # since we removed empty ctls
-            edges.append((f"ctl_{i}", "sink", {"capacity": n_max, "cost": 0}))
+    edges = []
+    for trt in trt_nodes:
+        edges.append(("source", trt, {"capacity": 1, "cost": 0}))
+
+    for ctl in ctl_nodes:
+        if ctl in G:  # since we removed empty ctls
+            edges.append((ctl, "sink", {"capacity": n_max, "cost": 0}))
 
     G.add_edges_from(edges)
-
     return G
-
 
 # def do_optimal_match(ctl, trt):
 

@@ -103,7 +103,7 @@ class Yapsm(object):
             errors = 0
             while i < nmodels and errors < 5:
                 # uf.progress(i+1, nmodels, prestr="Fitting Models on Balanced Samples")
-                print("Fitting Models on Balanced Samples")
+                # print("Fitting Models on Balanced Samples")
                 # sample from majority to create balance dataset
                 df = self.balanced_sample()
                 ctl, trt = self._get_ctl_treat_split(df)
@@ -195,6 +195,10 @@ class Yapsm(object):
 
         return mapping
 
+    def get_psmatched_dataset(self, mapping):
+        """simply return the dataframe with the matched samples"""
+        indices = set(mapping.keys()) | set(mapping.values())  
+        return self.data.loc[list(indices)]
 
 def drop_static_cols(df, yvar, cols=None):
     if not cols:
@@ -208,21 +212,58 @@ def drop_static_cols(df, yvar, cols=None):
             # sys.stdout.write('\rStatic column dropped: {}'.format(col))
     return df
 
+from scipy.special import expit as sigmoid
 
 def generate_toydata(n_ctl, n_trt):
-    x_ctl = np.random.multivariate_normal(
-        [0, 0], np.array([[1, 0], [0, 1]]), size=n_ctl
-    )
+    # x_ctl = np.random.multivariate_normal(
+    #     [0, 0], np.array([[1, 0], [0, 1]]), size=n_ctl
+    # )
+    x_ctl = np.random.multivariate_normal([-1,0], np.array([1, 0.5, 0.5, 1]).reshape(2,2), size=n_ctl)
+    
     ctl = pd.DataFrame(x_ctl, columns=["x1", "x2"])
     # ctl = pd.DataFrame(np.random.normal(0,1, size=(n_ctl, 2)), columns=['x1','x2'])
     ctl.index = [f"patient_ctl_{i}" for i in range(ctl.shape[0])]
     ctl["group"] = 0  #'ctl'
-
-    x_trt = np.random.multivariate_normal(
-        [2, 0], np.array([[1, 0], [0, 1]]), size=n_ctl
-    )
+    
+    # x_trt = np.random.multivariate_normal(
+    #     [2, 0], np.array([[1, 0], [0, 1]]), size=n_ctl
+    # )
+    x_trt = np.random.multivariate_normal([-1,2.5], np.array([1, 0.5, 0.5, 1]).reshape(2,2), size=n_trt)
     trt = pd.DataFrame(x_trt, columns=["x1", "x2"])
     trt["group"] = 1  # 'trt'
     trt.index = [f"patient_trt_{i}" for i in range(trt.shape[0])]
 
+    ctl['outcome'] = np.random.binomial(n=1,p=sigmoid(ctl['x2']))
+    trt['outcome'] = np.random.binomial(n=1,p=sigmoid(trt['x2']))
     return ctl, trt
+
+
+
+def match_1nn_smarter(ctl_score, trt_score, iterations=10):
+    """
+    with 1NN what happens often is that many trt are matched to a single ctl.
+    lets avoid that by (Greedily) reassigning those to the next-best match
+    """
+    nn = NearestNeighbors(n_neighbors=iterations)
+    nn = nn.fit(ctl_score)
+    dist, inx = nn.kneighbors(trt_score)
+
+    used_ctls = set()
+    already_matched_trts = set()
+    mapping = {}
+    for i in iterations:
+        for trt in range(inx.shape[0]):
+            if trt in already_matched_trts:
+                continue
+            ctl = inx[trt, i]  # it's ith best match
+            if ctl not in used_ctls:
+                mapping[trt] = ctl
+                already_matched_trts.add(trt)
+                used_ctls.add(ctl)
+            
+                
+            
+
+    
+
+    
