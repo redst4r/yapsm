@@ -16,6 +16,7 @@ class OptimalMatcher:
         self.ctl = ctl
         self.trt = trt
         self.nn_graph = None
+        self.Gflow = None
 
     def construct_knn_graph(self, n_neighbors):
         nn = NearestNeighbors(n_neighbors=n_neighbors)
@@ -28,12 +29,12 @@ class OptimalMatcher:
         Gflow = construct_bipart_for_flow(
             dist, inx, self.trt.shape[0], self.ctl.shape[0]
         )
-        # add sink
-        demand = dist.shape[0]  # we need to send out one unit of flow for each trt
-        self.Gflow = add_source_sink(Gflow, demand, n_max)
+        # add sink, srouce
+        self.Gflow = add_source_sink(Gflow, n_max)
 
     def solve_flow(self):
-        flow = nx.min_cost_flow(self.Gflow, weight="cost", capacity="capacity")
+        flow = nx.max_flow_min_cost(self.Gflow, 'source','sink',capacity='capacity')
+
         # mapping is at the level of the nodenames i.e. `ctl_i`, `trt_j`
         mapping = flow_to_mapping(flow)
 
@@ -92,13 +93,13 @@ def construct_bipart_for_flow(dist, inx, n_trt, n_ctl):
 
     return G
 
-def add_source_sink(G, demand, n_max):
+def add_source_sink(G, n_max):
     """
     augmenting the bipartite CTL-TRT graph with source and sink,
     enabling maxflow algoirithms
     """
-    G.add_node("source", nodetype="source", bipartite=1, demand=-demand)
-    G.add_node("sink", nodetype="sink", bipartite=0, demand=demand)
+    G.add_node("source", nodetype="source", bipartite=1)
+    G.add_node("sink", nodetype="sink", bipartite=0)
 
     ctl_nodes = [n for n in G if n.startswith('ctl')]
     trt_nodes = [n for n in G if n.startswith('trt')]

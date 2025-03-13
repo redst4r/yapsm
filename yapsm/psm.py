@@ -190,7 +190,10 @@ class Yapsm(object):
         om.construct_flow_graph(n_max=n_max)
         mapping, total_cost = om.solve_flow()
 
-        print("#control samples used", len(set(mapping.values())))
+        N_mapped_trt = len(set(mapping.keys()))
+        N_mapped_ctl = len(set(mapping.values()))
+        print(f"Mapped {N_mapped_trt} TRT  to {N_mapped_ctl} CTL")
+        
         print("Total cost", total_cost)
 
         return mapping
@@ -212,30 +215,7 @@ def drop_static_cols(df, yvar, cols=None):
             # sys.stdout.write('\rStatic column dropped: {}'.format(col))
     return df
 
-from scipy.special import expit as sigmoid
 
-def generate_toydata(n_ctl, n_trt):
-    # x_ctl = np.random.multivariate_normal(
-    #     [0, 0], np.array([[1, 0], [0, 1]]), size=n_ctl
-    # )
-    x_ctl = np.random.multivariate_normal([-1,0], np.array([1, 0.5, 0.5, 1]).reshape(2,2), size=n_ctl)
-    
-    ctl = pd.DataFrame(x_ctl, columns=["x1", "x2"])
-    # ctl = pd.DataFrame(np.random.normal(0,1, size=(n_ctl, 2)), columns=['x1','x2'])
-    ctl.index = [f"patient_ctl_{i}" for i in range(ctl.shape[0])]
-    ctl["group"] = 0  #'ctl'
-    
-    # x_trt = np.random.multivariate_normal(
-    #     [2, 0], np.array([[1, 0], [0, 1]]), size=n_ctl
-    # )
-    x_trt = np.random.multivariate_normal([-1,2.5], np.array([1, 0.5, 0.5, 1]).reshape(2,2), size=n_trt)
-    trt = pd.DataFrame(x_trt, columns=["x1", "x2"])
-    trt["group"] = 1  # 'trt'
-    trt.index = [f"patient_trt_{i}" for i in range(trt.shape[0])]
-
-    ctl['outcome'] = np.random.binomial(n=1,p=sigmoid(ctl['x2']))
-    trt['outcome'] = np.random.binomial(n=1,p=sigmoid(trt['x2']))
-    return ctl, trt
 
 
 
