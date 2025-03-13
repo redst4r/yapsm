@@ -164,7 +164,7 @@ class Yapsm(object):
             scores += m.predict(self.X[m.params.index])
         self.data["scores"] = scores / self.nmodels
 
-    def match_1nn(self):
+    def match_1nn(self, caliper=0):
         ctl, trt = self._get_ctl_treat_split(self.data)
 
         ctl_score = ctl[["scores"]]
@@ -174,7 +174,11 @@ class Yapsm(object):
         nn = nn.fit(ctl_score)
         dist, inx = nn.kneighbors(trt_score)
 
-        mapping_1nn = {trt.index[i]: ctl.index[inx[i, 0]] for i in range(trt.shape[0])}
+        mapping_1nn = {}
+        for i in range(trt.shape[0]):
+            # clipping of matches that are too far apart
+            if dist[i,0] < caliper:
+                mapping_1nn[trt.index[i]]: ctl.index[inx[i, 0]]
 
         total_distance = dist[:, 0].sum()
 
@@ -184,20 +188,19 @@ class Yapsm(object):
         logger.info("Total cost", total_distance)
         return mapping_1nn
 
-    def match_optimal(self, knn, n_max):
+    def match_optimal(self, knn, n_max, caliper=0):
         ctl, trt = self._get_ctl_treat_split(self.data)
         ctl_score = ctl[["scores"]]
         trt_score = trt[["scores"]]
 
         om = optimal_match.OptimalMatcher(ctl_score, trt_score)
         om.construct_knn_graph(knn)
-        om.construct_flow_graph(n_max=n_max)
+        om.construct_flow_graph(n_max=n_max, caliper=caliper)
         mapping, total_cost = om.solve_flow()
 
         N_mapped_trt = len(set(mapping.keys()))
         N_mapped_ctl = len(set(mapping.values()))
         logger.info(f"Mapped {N_mapped_trt} TRT  to {N_mapped_ctl} CTL")
-
         logger.info("Total cost", total_cost)
 
         return mapping
