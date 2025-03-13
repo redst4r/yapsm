@@ -1,11 +1,11 @@
 Yet another Propensity Score matching library. The existing libraries just didn't do it:
-- [psmpy](https://pypi.org/project/psmpy/) tries to do an exhaustive match between all controls and all treatments, which is way too slow (O(n^2))
-- [pymatch](https://github.com/benmiroglio/pymatch) has a nice way of estimationg propensity scores (repeated downsampling and averaging predictions), but just does random (within a threshold) or minimum matching. Also it can't do "no replacement" (i.e. can use the same sample multiple times)
+- [psmpy](https://pypi.org/project/psmpy/) tries to do an exhaustive match between all controls and all treatments, which is way too slow (`O(n^2)`)
+- [pymatch](https://github.com/benmiroglio/pymatch) has a nice way of estimating propensity scores (repeated downsampling and averaging predictions), but just does random (within a threshold) or minimum matching. Also it can't do "no replacement" (i.e. can use the same sample multiple times)
 
-This package uses kNN-graphs (i.e. for a given treatment sample, we consider only it's "k-best" matches in the controls), cutting down the runtime to O(nk).
+This package uses kNN-graphs (i.e. for a given treatment sample, we consider only it's "k-best" matches in the controls), cutting down the runtime to `O(nk)`.
 As for matching, it uses either:
-- a simple 1NN match (i.e. greedily selects the best control for each treatment)
-- an optimal matching (based on MinCostMaxFlow), which also allows to specify how often a control is allowed to be reused. Optimal matching is a bit time consuming though!
+- **simple 1NN match** (i.e. greedily selects the best control for each treatment)
+- **optimal matching** (based on `MinCostMaxFlow`), which also allows to specify how often a control is allowed to be reused. Optimal matching is a bit **time consuming** though!
 
 ## Minimal example
 ```python
@@ -25,7 +25,7 @@ p = psm.Yapsm(
 )
 p.fit_scores(balance=True)  # fit the LogReg, using class-balanced data
 p.predict_scores()  # predict propensity scores
-optimal_matching = p.match_optimal(knn=5, n_max=2)  # allowing each control to be used 2x at max
+optimal_matching = p.match_optimal(knn=5, n_max=2, caliper=0.25)  # allowing each control to be used 2x at max
 df_matched = p.get_psmatched_dataset(optimal_matching) # a dataframe containing the matched dataset
 ```
 
