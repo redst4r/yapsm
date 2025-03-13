@@ -5,6 +5,10 @@ import pandas as pd
 import patsy
 from sklearn.neighbors import NearestNeighbors
 from yapsm import optimal_match
+import networkx as nx
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def _escape_varname(x):
@@ -176,8 +180,8 @@ class Yapsm(object):
 
         nctl = len(set(mapping_1nn.values()))
         ctl_total = len(ctl)
-        print(f"#control samples used {nctl}/{ctl_total}")
-        print("Total cost", total_distance)
+        logger.info(f"#control samples used {nctl}/{ctl_total}")
+        logger.info("Total cost", total_distance)
         return mapping_1nn
 
     def match_optimal(self, knn, n_max):
@@ -192,16 +196,17 @@ class Yapsm(object):
 
         N_mapped_trt = len(set(mapping.keys()))
         N_mapped_ctl = len(set(mapping.values()))
-        print(f"Mapped {N_mapped_trt} TRT  to {N_mapped_ctl} CTL")
-        
-        print("Total cost", total_cost)
+        logger.info(f"Mapped {N_mapped_trt} TRT  to {N_mapped_ctl} CTL")
+
+        logger.info("Total cost", total_cost)
 
         return mapping
 
     def get_psmatched_dataset(self, mapping):
         """simply return the dataframe with the matched samples"""
-        indices = set(mapping.keys()) | set(mapping.values())  
+        indices = set(mapping.keys()) | set(mapping.values())
         return self.data.loc[list(indices)]
+
 
 def drop_static_cols(df, yvar, cols=None):
     if not cols:
@@ -214,9 +219,6 @@ def drop_static_cols(df, yvar, cols=None):
             df.drop(col, axis=1, inplace=True)
             # sys.stdout.write('\rStatic column dropped: {}'.format(col))
     return df
-
-
-
 
 
 def match_1nn_smarter(ctl_score, trt_score, iterations=10):
@@ -240,10 +242,3 @@ def match_1nn_smarter(ctl_score, trt_score, iterations=10):
                 mapping[trt] = ctl
                 already_matched_trts.add(trt)
                 used_ctls.add(ctl)
-            
-                
-            
-
-    
-
-    

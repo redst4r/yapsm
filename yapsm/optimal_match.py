@@ -2,6 +2,9 @@ import networkx as nx
 from sklearn.neighbors import NearestNeighbors
 import numpy as np
 import pandas as pd
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def _is_unique(x):
@@ -24,8 +27,10 @@ class OptimalMatcher:
 
     def construct_flow_graph(self, n_max):
         """turns itself into a networkx graph whose MaxFlow is our desired assignemtn"""
+        logger.info(f"kNN query (k={self.nn_graph.n_neighbors})")
         dist, inx = self.nn_graph.kneighbors(self.trt)
 
+        logger.info("constructing Flow graph")
         Gflow = construct_bipart_for_flow(
             dist, inx, self.trt.shape[0], self.ctl.shape[0]
         )
@@ -33,7 +38,7 @@ class OptimalMatcher:
         self.Gflow = add_source_sink(Gflow, n_max)
 
     def solve_flow(self):
-        flow = nx.max_flow_min_cost(self.Gflow, 'source','sink',capacity='capacity')
+        logger.info("solving flow")
 
         flow = nx.max_flow_min_cost(
             self.Gflow, "source", "sink", capacity="capacity", weight="cost"
@@ -84,6 +89,7 @@ def construct_bipart_for_flow(dist, inx, n_trt, n_ctl):
                 (
                     start_node,
                     end_node,
+                    # maxflow can only deal with integer costs, so lets just make them into big ints via rounding
                     {"cost": int(10000 * d), "cost_original": d, "capacity": np.inf},
                 )
             )
@@ -130,6 +136,18 @@ def add_source_sink(G, n_max, demand=None):
 
     G.add_edges_from(edges)
     return G
+
+
+def apply_caliper(Gflow, caliper: float):
+    """
+    warning: modifies the original
+    """
+    edges_to_remove = []
+    for edge, data in Gflow.edges(data=True):
+        if data["cost_original"] > caliper:
+            edges_to_remove.append(edge)
+    Gflow.remove_edges_from(edges_to_remove)
+
 
 # def do_optimal_match(ctl, trt):
 

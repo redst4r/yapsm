@@ -1,6 +1,6 @@
 import pandas as pd
 from . import psm
-from .psm import generate_toydata
+from .utils import generate_toydata
 
 
 def test_the_whole_thing():
