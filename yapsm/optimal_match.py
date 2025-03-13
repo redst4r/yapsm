@@ -96,24 +96,37 @@ def construct_bipart_for_flow(dist, inx, n_trt, n_ctl):
 
     return G
 
-def add_source_sink(G, n_max):
+
+def add_source_sink(G, n_max, demand=None):
     """
     augmenting the bipartite CTL-TRT graph with source and sink,
     enabling maxflow algoirithms
-    """
-    G.add_node("source", nodetype="source", bipartite=1)
-    G.add_node("sink", nodetype="sink", bipartite=0)
 
-    ctl_nodes = [n for n in G if n.startswith('ctl')]
-    trt_nodes = [n for n in G if n.startswith('trt')]
+    optionally set a demand on the source (negative) and sink
+    """
+
+    if demand is None:
+        G.add_node("source", nodetype="source", bipartite=1)
+        G.add_node("sink", nodetype="sink", bipartite=0)
+    else:
+        G.add_node("source", nodetype="source", bipartite=1, demand=-demand)
+        G.add_node("sink", nodetype="sink", bipartite=0, demand=demand)
+
+    ctl_nodes = [n for n in G if n.startswith("ctl")]
+    trt_nodes = [n for n in G if n.startswith("trt")]
+
+    # ctl_nodes = [n for n, data in G.nodes(data=True) if data['bipartite']==0]
+    # trt_nodes = [n for n, data in G.nodes(data=True) if  data['bipartite']==1]
 
     edges = []
     for trt in trt_nodes:
-        edges.append(("source", trt, {"capacity": 1, "cost": 0}))
+        edges.append(("source", trt, {"capacity": 1, "cost": 0, "cost_original": 0}))
 
     for ctl in ctl_nodes:
         if ctl in G:  # since we removed empty ctls
-            edges.append((ctl, "sink", {"capacity": n_max, "cost": 0}))
+            edges.append(
+                (ctl, "sink", {"capacity": n_max, "cost": 0, "cost_original": 0})
+            )
 
     G.add_edges_from(edges)
     return G
