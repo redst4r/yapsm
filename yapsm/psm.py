@@ -188,7 +188,7 @@ class Yapsm(object):
         logger.info("Total cost", total_distance)
         return mapping_1nn
 
-    def match_optimal(self, knn, n_max, caliper=0):
+    def match_optimal(self, knn, n_max, caliper=np.inf):
         ctl, trt = self._get_ctl_treat_split(self.data)
         ctl_score = ctl[["scores"]]
         trt_score = trt[["scores"]]

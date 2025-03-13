@@ -27,7 +27,7 @@ class OptimalMatcher:
         nn = NearestNeighbors(n_neighbors=n_neighbors)
         self.nn_graph = nn.fit(self.ctl)
 
-    def construct_flow_graph(self, n_max, caliper=0):
+    def construct_flow_graph(self, n_max, caliper=np.inf):
         """turns itself into a networkx graph whose MaxFlow is our desired assignemtn"""
         logger.info(f"kNN query (k={self.nn_graph.n_neighbors})")
         dist, inx = self.nn_graph.kneighbors(self.trt)
@@ -38,7 +38,6 @@ class OptimalMatcher:
         )
         # add sink, srouce
         self.Gflow = add_source_sink(Gflow, n_max)
-
         apply_caliper(Gflow, caliper=caliper)
 
     def solve_flow(self):
