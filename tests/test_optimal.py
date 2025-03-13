@@ -1,5 +1,5 @@
-from . import optimal_match
-from .utils import generate_toydata
+from yapsm import optimal_match
+from yapsm.utils import generate_toydata
 import networkx as nx
 
 def example_graph():
