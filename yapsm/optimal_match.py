@@ -16,6 +16,8 @@ class OptimalMatcher:
     def __init__(self, ctl: pd.DataFrame, trt: pd.DataFrame):
         assert _is_unique(ctl.index)
         assert _is_unique(trt.index)
+        assert len(set(ctl.index) &set(trt.index)) == 0, "ctl and trt ids cant overl"
+
         self.ctl = ctl
         self.trt = trt
         self.nn_graph = None
@@ -32,7 +34,7 @@ class OptimalMatcher:
 
         logger.info("constructing Flow graph")
         Gflow = construct_bipart_for_flow(
-            dist, inx, self.trt.shape[0], self.ctl.shape[0]
+            dist, inx, list(self.trt.index), list(self.ctl.index)
         )
         # add sink, srouce
         self.Gflow = add_source_sink(Gflow, n_max)
@@ -51,30 +53,25 @@ class OptimalMatcher:
             for trt_node, ctl_node in mapping.items()
         )
 
-        # translate the nodenames to the index in self.trt, self.ctl
-        def _nodename_to_index(name):
-            return int(name.split("_")[1])
-
-        trt_index = self.trt.index
-        ctl_index = self.ctl.index
-        mapping_final = {
-            trt_index[_nodename_to_index(trt_i)]: ctl_index[_nodename_to_index(ctl_j)]
-            for trt_i, ctl_j in mapping.items()
-        }
-
+        mapping_final = mapping
         return mapping_final, total_cost
 
 
-def construct_bipart_for_flow(dist, inx, n_trt, n_ctl):
+def construct_bipart_for_flow(dist, inx, trt_names, ctl_names):
     """
+    trt_names and ctl names must match the order in dist, and inx
+
     edges go from source -> (TRT -> CTL) -> sink
     NOTE: we DONT add source/sink here
     """
-    assert dist.shape[0] == inx.shape[0] == n_trt
+    assert dist.shape[0] == inx.shape[0] == len(trt_names)
+    assert _is_unique(trt_names)
+    assert _is_unique(ctl_names)
+    assert len(set(trt_names) &set(ctl_names)) == 0, "ctl and trt ids cant overl"
 
     G = nx.DiGraph()
-    [G.add_node(f"ctl_{i}", bipartite=0, nodetype="ctl") for i in range(n_ctl)]
-    [G.add_node(f"trt_{i}", bipartite=1, nodetype="trt") for i in range(n_trt)]
+    [G.add_node(n, bipartite=0, nodetype="ctl") for n in ctl_names]
+    [G.add_node(n, bipartite=1, nodetype="trt") for n in trt_names]
 
     edges = []
 
@@ -82,8 +79,8 @@ def construct_bipart_for_flow(dist, inx, n_trt, n_ctl):
         for j in range(dist.shape[1]):
             d = dist[i, j]
             target_ctl = inx[i, j]
-            start_node = f"trt_{i}"
-            end_node = f"ctl_{target_ctl}"
+            start_node = trt_names[i]
+            end_node = ctl_names[target_ctl]
             assert start_node in G and end_node in G
             edges.append(
                 (
@@ -96,8 +93,7 @@ def construct_bipart_for_flow(dist, inx, n_trt, n_ctl):
 
     G.add_edges_from(edges)
     # remove unused ctls
-    to_removed = [n for n in G.nodes() if G.degree[n] == 0 and n.startswith("ctl")]
-    # print(to_removed)
+    to_removed = [n for n, data in G.nodes(data=True) if G.degree[n] == 0 and data['bipartite']==0]
     G.remove_nodes_from(to_removed)
 
     return G
@@ -111,15 +107,15 @@ def add_source_sink(G, n_max, demand=None):
     optionally set a demand on the source (negative) and sink
     """
 
+    ctl_nodes = [n for n, data in G.nodes(data=True) if data['bipartite']==0]
+    trt_nodes = [n for n, data in G.nodes(data=True) if data['bipartite']==1]
+
     if demand is None:
         G.add_node("source", nodetype="source", bipartite=1)
         G.add_node("sink", nodetype="sink", bipartite=0)
     else:
         G.add_node("source", nodetype="source", bipartite=1, demand=-demand)
         G.add_node("sink", nodetype="sink", bipartite=0, demand=demand)
-
-    ctl_nodes = [n for n in G if n.startswith("ctl")]
-    trt_nodes = [n for n in G if n.startswith("trt")]
 
     # ctl_nodes = [n for n, data in G.nodes(data=True) if data['bipartite']==0]
     # trt_nodes = [n for n, data in G.nodes(data=True) if  data['bipartite']==1]
@@ -143,9 +139,9 @@ def apply_caliper(Gflow, caliper: float):
     warning: modifies the original
     """
     edges_to_remove = []
-    for edge, data in Gflow.edges(data=True):
+    for u, v, data in Gflow.edges(data=True):
         if data["cost_original"] > caliper:
-            edges_to_remove.append(edge)
+            edges_to_remove.append((u,v))
     Gflow.remove_edges_from(edges_to_remove)
 
 
@@ -177,11 +173,14 @@ def flow_to_mapping(flow):
     """
     mapping = {}
 
-    trt_nodes = [_ for _ in flow.keys() if _.startswith("trt_")]
-    for trt_node in trt_nodes:
-        # for trt_node in [f'trt_{i}' for i in range(trt.shape[0])]:
-        for ctl_node, active_flow in flow[trt_node].items():
-            if active_flow > 0:
-                assert trt_node not in mapping
-                mapping[trt_node] = ctl_node
+    for node, target_dict in flow.items():
+        # for each start node, target_dict has the flow of start - key
+        if node == "source":
+            continue
+
+        for target, active_flow in target_dict.items():
+            if target != "sink" and active_flow>0:
+                assert node not in mapping
+                mapping[node]= target
+
     return mapping
