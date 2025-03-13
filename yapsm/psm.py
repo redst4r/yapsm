@@ -7,7 +7,7 @@ from sklearn.neighbors import NearestNeighbors
 from yapsm import optimal_match
 import networkx as nx
 import logging
-
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -136,9 +136,8 @@ class Yapsm(object):
                         errors + 1
                     )  # to avoid infinite loop for misspecified matrix
                     print("Error: {}".format(e))
-            print(
-                "\nAverage Accuracy:",
-                "{}%".format(round(np.mean(self.model_accuracy) * 100, 2)),
+            logger.info(
+                "Average Classification Accuracy: {}%".format(round(np.mean(self.model_accuracy) * 100, 2)),
             )
         else:
             # ignore any imbalance and fit one model
@@ -185,7 +184,7 @@ class Yapsm(object):
         nctl = len(set(mapping_1nn.values()))
         ctl_total = len(ctl)
         logger.info(f"#control samples used {nctl}/{ctl_total}")
-        logger.info("Total cost", total_distance)
+        logger.info(f"Total cost {total_distance:.3f}")
         return mapping_1nn
 
     def match_optimal(self, knn, n_max, caliper=np.inf):
@@ -201,7 +200,7 @@ class Yapsm(object):
         N_mapped_trt = len(set(mapping.keys()))
         N_mapped_ctl = len(set(mapping.values()))
         logger.info(f"Mapped {N_mapped_trt} TRT  to {N_mapped_ctl} CTL")
-        logger.info("Total cost", total_cost)
+        logger.info(f"Total cost {total_cost:.3f}")
 
         return mapping
 
