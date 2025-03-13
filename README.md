@@ -8,6 +8,7 @@ As for matching, it uses either:
 - **optimal matching** (based on `MinCostMaxFlow`), which also allows to specify how often a control is allowed to be reused. Optimal matching is a bit **time consuming** though!
 
 ## Minimal example
+using **optimal matching**
 ```python
 # make up some data in 2D
 ctl = pd.DataFrame(np.random.normal(0, 2, size=(20, 2)), index=[f"ctl_{i}" for i in range(20)], columns=['x1','x2'])
@@ -27,6 +28,12 @@ p.fit_scores(balance=True)  # fit the LogReg, using class-balanced data
 p.predict_scores()  # predict propensity scores
 optimal_matching = p.match_optimal(knn=5, n_max=2, caliper=0.25)  # allowing each control to be used 2x at max
 df_matched = p.get_psmatched_dataset(optimal_matching) # a dataframe containing the matched dataset
+```
+
+Alternatively, use greedy **1-NN matching**
+```python
+nn1_matching = p.match_1nn(caliper=0.25)
+df_matched = p.get_psmatched_dataset(nn1_matching)
 ```
 
 ## Credits

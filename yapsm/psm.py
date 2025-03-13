@@ -163,7 +163,7 @@ class Yapsm(object):
             scores += m.predict(self.X[m.params.index])
         self.data["scores"] = scores / self.nmodels
 
-    def match_1nn(self, caliper=0):
+    def match_1nn(self, caliper=np.inf):
         ctl, trt = self._get_ctl_treat_split(self.data)
 
         ctl_score = ctl[["scores"]]
@@ -174,17 +174,21 @@ class Yapsm(object):
         dist, inx = nn.kneighbors(trt_score)
 
         mapping_1nn = {}
+        total_distance = 0 
         for i in range(trt.shape[0]):
             # clipping of matches that are too far apart
             if dist[i,0] < caliper:
-                mapping_1nn[trt.index[i]]: ctl.index[inx[i, 0]]
+                mapping_1nn[trt.index[i]] = ctl.index[inx[i, 0]]
+                total_distance += dist[i,0]
 
-        total_distance = dist[:, 0].sum()
+        # nctl = len(set(mapping_1nn.values()))
+        # ctl_total = len(ctl)
+        # logger.info(f"#control samples used {nctl}/{ctl_total}")
 
-        nctl = len(set(mapping_1nn.values()))
-        ctl_total = len(ctl)
-        logger.info(f"#control samples used {nctl}/{ctl_total}")
-        logger.info(f"Total cost {total_distance:.3f}")
+        N_mapped_trt = len(set(mapping_1nn.keys()))
+        N_mapped_ctl = len(set(mapping_1nn.values()))        
+        logger.info(f"Mapped {N_mapped_trt} TRT  to {N_mapped_ctl} CTL")
+        logger.info(f"Total cost {total_distance:.3f}")        
         return mapping_1nn
 
     def match_optimal(self, knn, n_max, caliper=np.inf):
