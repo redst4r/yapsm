@@ -35,6 +35,9 @@ class OptimalMatcher:
     def solve_flow(self):
         flow = nx.max_flow_min_cost(self.Gflow, 'source','sink',capacity='capacity')
 
+        flow = nx.max_flow_min_cost(
+            self.Gflow, "source", "sink", capacity="capacity", weight="cost"
+        )
         # mapping is at the level of the nodenames i.e. `ctl_i`, `trt_j`
         mapping = flow_to_mapping(flow)
 
