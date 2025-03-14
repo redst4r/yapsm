@@ -14,10 +14,19 @@ def _is_unique(x):
 
 
 class OptimalMatcher:
+    """Optimal matching via networkx MaxFlow (based on NetworkSimplex)
+
+    Transforms the matching problem into a Flow problem on graphs
+    """
+
     def __init__(self, ctl: pd.DataFrame, trt: pd.DataFrame):
+        """
+        :param ctl: Dataframe with control sample; index needs to be unique
+        :param trt: Dataframe with treatment sample; index needs to be unique
+        """
         assert _is_unique(ctl.index)
         assert _is_unique(trt.index)
-        assert len(set(ctl.index) &set(trt.index)) == 0, "ctl and trt ids cant overl"
+        assert len(set(ctl.index) & set(trt.index)) == 0, "ctl and trt ids cant overl"
 
         self.ctl = ctl
         self.trt = trt
@@ -25,11 +34,16 @@ class OptimalMatcher:
         self.Gflow = None
 
     def construct_knn_graph(self, n_neighbors):
+        """build a knn graph of the controls"""
         nn = NearestNeighbors(n_neighbors=n_neighbors)
         self.nn_graph = nn.fit(self.ctl)
 
     def construct_flow_graph(self, n_max, caliper=np.inf):
-        """turns itself into a networkx graph whose MaxFlow is our desired assignemtn"""
+        """turns itself into a networkx graph whose MaxFlow is our desired assignemtn
+
+        :param n_max: max number of times the same control can be assignet to any treatment (n_max=1 for 1:1 matching)
+        :param caliper: ctl/trt pairs with distance > caliper wont be considered; essentially trims edges in the flow graph
+        """
         logger.info(f"kNN query (k={self.nn_graph.n_neighbors})")
         dist, inx = self.nn_graph.kneighbors(self.trt)
 
@@ -42,6 +56,7 @@ class OptimalMatcher:
         apply_caliper(Gflow, caliper=caliper)
 
     def solve_flow(self):
+        """Solving the network flow problem, thereby returning the optimal assignemnt of ctl/trrt"""
         logger.info("solving flow")
 
         flow = nx.max_flow_min_cost(
@@ -50,13 +65,15 @@ class OptimalMatcher:
         # mapping is at the level of the nodenames i.e. `ctl_i`, `trt_j`
         mapping = flow_to_mapping(flow)
 
-        total_cost = sum(
+        total_cost = self.get_cost(mapping)
+
+        return mapping, total_cost
+
+    def get_cost(self, mapping):
+        return sum(
             self.Gflow[trt_node][ctl_node]["cost_original"]
             for trt_node, ctl_node in mapping.items()
         )
-
-        mapping_final = mapping
-        return mapping_final, total_cost
 
 
 def construct_bipart_for_flow(dist, inx, trt_names, ctl_names):
@@ -69,7 +86,7 @@ def construct_bipart_for_flow(dist, inx, trt_names, ctl_names):
     assert dist.shape[0] == inx.shape[0] == len(trt_names)
     assert _is_unique(trt_names)
     assert _is_unique(ctl_names)
-    assert len(set(trt_names) &set(ctl_names)) == 0, "ctl and trt ids cant overl"
+    assert len(set(trt_names) & set(ctl_names)) == 0, "ctl and trt ids cant overl"
 
     G = nx.DiGraph()
     [G.add_node(n, bipartite=0, nodetype="ctl") for n in ctl_names]
@@ -95,7 +112,11 @@ def construct_bipart_for_flow(dist, inx, trt_names, ctl_names):
 
     G.add_edges_from(edges)
     # remove unused ctls
-    to_removed = [n for n, data in G.nodes(data=True) if G.degree[n] == 0 and data['bipartite']==0]
+    to_removed = [
+        n
+        for n, data in G.nodes(data=True)
+        if G.degree[n] == 0 and data["bipartite"] == 0
+    ]
     G.remove_nodes_from(to_removed)
 
     return G
@@ -109,8 +130,8 @@ def add_source_sink(G, n_max, demand=None):
     optionally set a demand on the source (negative) and sink
     """
 
-    ctl_nodes = [n for n, data in G.nodes(data=True) if data['bipartite']==0]
-    trt_nodes = [n for n, data in G.nodes(data=True) if data['bipartite']==1]
+    ctl_nodes = [n for n, data in G.nodes(data=True) if data["bipartite"] == 0]
+    trt_nodes = [n for n, data in G.nodes(data=True) if data["bipartite"] == 1]
 
     if demand is None:
         G.add_node("source", nodetype="source", bipartite=1)
@@ -143,7 +164,7 @@ def apply_caliper(Gflow, caliper: float):
     edges_to_remove = []
     for u, v, data in Gflow.edges(data=True):
         if data["cost_original"] > caliper:
-            edges_to_remove.append((u,v))
+            edges_to_remove.append((u, v))
     Gflow.remove_edges_from(edges_to_remove)
 
 
@@ -181,8 +202,8 @@ def flow_to_mapping(flow):
             continue
 
         for target, active_flow in target_dict.items():
-            if target != "sink" and active_flow>0:
+            if target != "sink" and active_flow > 0:
                 assert node not in mapping
-                mapping[node]= target
+                mapping[node] = target
 
     return mapping

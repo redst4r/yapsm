@@ -5,8 +5,8 @@ import pandas as pd
 import patsy
 from sklearn.neighbors import NearestNeighbors
 from yapsm import optimal_match
-import networkx as nx
 import logging
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ class Yapsm(object):
         preds = [[1.0 if i >= 0.5 else 0.0 for i in m.predict(X)]]
         return (y.to_numpy().T == preds).sum() * 1.0 / len(y)
 
-    def balanced_sample(self, data=None):
+    def _balanced_sample(self, data=None):
         if not data:
             data = self.data
         minor, major = (
@@ -32,11 +32,22 @@ class Yapsm(object):
         return pd.concat([major.sample(len(minor)), minor]).dropna()
 
     def _get_ctl_treat_split(self, df):
+        """
+        get two separate dataframes, one for control samples, one for treatment
+        """
         crl = df[df[self.yvar] == self.group_ctl]
         trt = df[df[self.yvar] == self.group_trt]
         return crl, trt
 
     def __init__(self, data, yvar, group_ctl, group_trt, formula=None, exclude=[]):
+        """
+        :param data: DataFrame, one sample per row
+        :param yvar: columnname in `data` that indicates group membership
+        :param group_ctl: label for the control group, i.e. `data[yvar] == group_ctl` are the control samples
+        :param group_ctl: label for the treatment group, see above
+        :param formula: can leave empty TODO
+        :param exclude: columns to exclude from the logreg TODO
+        """
         self.models = []  # the logreg models
         self.model_accuracy = []
 
@@ -109,7 +120,7 @@ class Yapsm(object):
                 # uf.progress(i+1, nmodels, prestr="Fitting Models on Balanced Samples")
                 # print("Fitting Models on Balanced Samples")
                 # sample from majority to create balance dataset
-                df = self.balanced_sample()
+                df = self._balanced_sample()
                 ctl, trt = self._get_ctl_treat_split(df)
                 df = pd.concat(
                     [
@@ -137,7 +148,9 @@ class Yapsm(object):
                     )  # to avoid infinite loop for misspecified matrix
                     print("Error: {}".format(e))
             logger.info(
-                "Average Classification Accuracy: {}%".format(round(np.mean(self.model_accuracy) * 100, 2)),
+                "Average Classification Accuracy: {}%".format(
+                    round(np.mean(self.model_accuracy) * 100, 2)
+                ),
             )
         else:
             # ignore any imbalance and fit one model
@@ -164,6 +177,12 @@ class Yapsm(object):
         self.data["scores"] = scores / self.nmodels
 
     def match_1nn(self, caliper=np.inf):
+        """
+        do PSM with a 1st nearest neighbor approach, i.e. for each treatment, pick it;s closest control sample
+        Note: controls can be selected multiple times
+
+        :param caliper: max allowed distance for a valid pairing; if the 1-nn is fuarther than `caliper`, the sample wont be paired
+        """
         ctl, trt = self._get_ctl_treat_split(self.data)
 
         ctl_score = ctl[["scores"]]
@@ -174,24 +193,28 @@ class Yapsm(object):
         dist, inx = nn.kneighbors(trt_score)
 
         mapping_1nn = {}
-        total_distance = 0 
+        total_distance = 0
         for i in range(trt.shape[0]):
             # clipping of matches that are too far apart
-            if dist[i,0] < caliper:
+            if dist[i, 0] < caliper:
                 mapping_1nn[trt.index[i]] = ctl.index[inx[i, 0]]
-                total_distance += dist[i,0]
-
-        # nctl = len(set(mapping_1nn.values()))
-        # ctl_total = len(ctl)
-        # logger.info(f"#control samples used {nctl}/{ctl_total}")
+                total_distance += dist[i, 0]
 
         N_mapped_trt = len(set(mapping_1nn.keys()))
-        N_mapped_ctl = len(set(mapping_1nn.values()))        
+        N_mapped_ctl = len(set(mapping_1nn.values()))
         logger.info(f"Mapped {N_mapped_trt} TRT  to {N_mapped_ctl} CTL")
-        logger.info(f"Total cost {total_distance:.3f}")        
+        logger.info(f"Total cost {total_distance:.3f}")
         return mapping_1nn
 
     def match_optimal(self, knn, n_max, caliper=np.inf):
+        """PSM with (approximate) optimal matching.
+        Approximate: we only consider the knn-Neighbours of a treatment instead of all controls.
+        Optimal: restricted to the knn of all the treatments, the solution is optimal (rather than greedy)
+
+        :param knn: number of nearset neighbours to consider per treatment, usually 100 is a good start
+        :param n_max: max number of times a control sample can be paired. Set `n_max=1` for 1:1 pairng (i.e. no replacement)
+        :param caliper: Any control more distant than `caliper` wont be consider for at treatment
+        """
         ctl, trt = self._get_ctl_treat_split(self.data)
         ctl_score = ctl[["scores"]]
         trt_score = trt[["scores"]]
@@ -209,7 +232,10 @@ class Yapsm(object):
         return mapping
 
     def get_psmatched_dataset(self, mapping):
-        """simply return the dataframe with the matched samples"""
+        """simply return the dataframe with the matched samples
+
+        :param mapping: the ctl/trt mapping obtained by `match_optimal` or `match_1nn()`
+        """
         indices = set(mapping.keys()) | set(mapping.values())
         return self.data.loc[list(indices)]
 
@@ -231,6 +257,8 @@ def match_1nn_smarter(ctl_score, trt_score, iterations=10):
     """
     with 1NN what happens often is that many trt are matched to a single ctl.
     lets avoid that by (Greedily) reassigning those to the next-best match
+
+    TODO
     """
     nn = NearestNeighbors(n_neighbors=iterations)
     nn = nn.fit(ctl_score)

@@ -43,8 +43,8 @@ def plot_imbalance(df_original, df_matched, treat):
         pn.ggplot(df_merged)
         + pn.aes(y="index", x="abs_mean_diff", fill="source")
         + pn.geom_point()
-        + pn.labs(x='Standardized Mean Difference', y='Variables')
-        + pn.lims(x=[0,None])
+        + pn.labs(x="Standardized Mean Difference", y="Variables")
+        + pn.lims(x=[0, None])
     )
 
 
