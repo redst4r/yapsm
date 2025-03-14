@@ -3,6 +3,7 @@ from sklearn.neighbors import NearestNeighbors
 import numpy as np
 import pandas as pd
 import logging
+from yapsm.matching_or import ORMatcher
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -55,19 +56,33 @@ class OptimalMatcher:
         self.Gflow = add_source_sink(Gflow, n_max)
         apply_caliper(Gflow, caliper=caliper)
 
-    def solve_flow(self):
-        """Solving the network flow problem, thereby returning the optimal assignemnt of ctl/trrt"""
-        logger.info("solving flow")
+    def solve_flow_networkx(self):
+        """Solving the network flow problem, thereby returning the optimal assignemnt of ctl/trrt
+
+        rather slow!
+        """
+        logger.info("solving flow with networkx")
 
         flow = nx.max_flow_min_cost(
             self.Gflow, "source", "sink", capacity="capacity", weight="cost"
         )
         # mapping is at the level of the nodenames i.e. `ctl_i`, `trt_j`
         mapping = flow_to_mapping(flow)
-
         total_cost = self.get_cost(mapping)
 
         return mapping, total_cost
+
+    def solve_flow_ortools(self):
+        logger.info("solving flow with ortools")
+
+        """solve the flow using ortools, orders of magnitude faster!"""
+        orm = ORMatcher(self.Gflow)
+        mapping_or, _cost = orm.solve_flow()
+        # note: the returned cost is wrong (the flow is still correct!)
+        # because ortools operates on the integer version of the cost (real cost multiplied by some large numbee)
+        total_cost = self.get_cost(mapping_or)
+
+        return mapping_or, total_cost
 
     def get_cost(self, mapping):
         return sum(

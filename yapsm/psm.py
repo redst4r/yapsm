@@ -222,7 +222,9 @@ class Yapsm(object):
         om = optimal_match.OptimalMatcher(ctl_score, trt_score)
         om.construct_knn_graph(knn)
         om.construct_flow_graph(n_max=n_max, caliper=caliper)
-        mapping, total_cost = om.solve_flow()
+
+        # mapping, total_cost = om.solve_flow_networkx()  # slow version!
+        mapping, total_cost = om.solve_flow_ortools()
 
         N_mapped_trt = len(set(mapping.keys()))
         N_mapped_ctl = len(set(mapping.values()))
