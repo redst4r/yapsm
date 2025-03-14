@@ -1,7 +1,7 @@
 [project]
 name = "yapsm"
 version = "0.2.0"
-description = "Add your description here"
+description = "Yet another Propensity Score Matching library"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -11,6 +11,13 @@ dependencies = [
     "scikit-learn>=1.6.1",
     "statsmodels>=0.14.4",
 ]
+
+authors = [
+  { name="redst4r", email="redst4r@web.de" },
+]
+
+[project.urls]
+Homepage = "https://github.com/redst4r/yapsm"
 
 [dependency-groups]
 dev = [
